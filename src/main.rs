@@ -30,14 +30,9 @@ pub trait Handler {
 // A. FirstLineSupport //
 // =================== //
 
+#[derive(Default)]
 pub struct FirstLineSupport {
     next_handler: Option<Box<dyn Handler>>,
-}
-
-impl Default for FirstLineSupport {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl FirstLineSupport {
@@ -68,14 +63,9 @@ impl Handler for FirstLineSupport {
 // B. Supervisor //
 // ============= //
 
+#[derive(Default)]
 pub struct Supervisor {
     next_handler: Option<Box<dyn Handler>>,
-}
-
-impl Default for Supervisor {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl Supervisor {
