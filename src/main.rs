@@ -50,7 +50,10 @@ impl Handler for FirstLineSupport {
     fn handle(&self, request: &SupportRequest) {
         if matches!(request, SupportRequest::PasswordReset) {
             println!("FirstLineSupport: Resolved the PasswordReset request.");
-        } else if let Some(ref next_handler) = self.next_handler {
+            return;
+        }
+
+        if let Some(ref next_handler) = self.next_handler {
             println!("FirstLineSupport: Cannot handle. Passing to next...");
             next_handler.handle(request);
         } else {
@@ -83,7 +86,10 @@ impl Handler for Supervisor {
     fn handle(&self, request: &SupportRequest) {
         if matches!(request, SupportRequest::BillingIssue) {
             println!("Supervisor: Resolved the BillingIssue request.");
-        } else if let Some(ref next_handler) = self.next_handler {
+            return;
+        }
+
+        if let Some(ref next_handler) = self.next_handler {
             println!("Supervisor: Cannot handle. Passing to next...");
             next_handler.handle(request);
         } else {
