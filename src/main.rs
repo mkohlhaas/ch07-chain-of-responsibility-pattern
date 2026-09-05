@@ -13,13 +13,30 @@ pub enum SupportRequest {
     CorporateContract,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum HandleResult {
+    Handled,
+    Escalated,
+    Unhandled,
+}
+
 // ============================================================ //
 // 2. Define the Handler trait with dynamic dispatch capability //
 // ============================================================ //
 
 pub trait Handler {
-    fn handle(&self, request: &SupportRequest);
+    fn handle(&self, request: &SupportRequest) -> HandleResult;
     fn set_next_handler(&mut self, next: Box<dyn Handler>);
+}
+
+fn walk_chain(next_handler: Option<&Box<dyn Handler>>, request: &SupportRequest) -> HandleResult {
+    match next_handler {
+        Some(next) => match next.handle(request) {
+            HandleResult::Handled | HandleResult::Escalated => HandleResult::Escalated,
+            HandleResult::Unhandled => HandleResult::Unhandled,
+        },
+        None => HandleResult::Unhandled,
+    }
 }
 
 // =========================== //
@@ -47,17 +64,16 @@ impl Handler for FirstLineSupport {
     }
 
     // FirstLineSupport can only handle PasswordResets
-    fn handle(&self, request: &SupportRequest) {
+    fn handle(&self, request: &SupportRequest) -> HandleResult {
         if matches!(request, SupportRequest::PasswordReset) {
             println!("FirstLineSupport: Resolved the PasswordReset request.");
-            return;
-        }
-
-        if let Some(ref next_handler) = self.next_handler {
+            HandleResult::Handled
+        } else if self.next_handler.is_some() {
             println!("FirstLineSupport: Cannot handle. Passing to next...");
-            next_handler.handle(request);
+            walk_chain(self.next_handler.as_ref(), request)
         } else {
             println!("FirstLineSupport: Reached end of chain. Request unhandled.");
+            HandleResult::Unhandled
         }
     }
 }
@@ -83,17 +99,16 @@ impl Handler for Supervisor {
     }
 
     // Supervisor can only handle BillingIssues
-    fn handle(&self, request: &SupportRequest) {
+    fn handle(&self, request: &SupportRequest) -> HandleResult {
         if matches!(request, SupportRequest::BillingIssue) {
             println!("Supervisor: Resolved the BillingIssue request.");
-            return;
-        }
-
-        if let Some(ref next_handler) = self.next_handler {
+            HandleResult::Handled
+        } else if self.next_handler.is_some() {
             println!("Supervisor: Cannot handle. Passing to next...");
-            next_handler.handle(request);
+            walk_chain(self.next_handler.as_ref(), request)
         } else {
             println!("Supervisor: Cannot handle. Reached end of chain. Request unhandled.");
+            HandleResult::Unhandled
         }
     }
 }
@@ -111,15 +126,15 @@ fn main() {
 
     // Test a request handled at the start
     println!("== Submitting Password Reset ==");
-    first.handle(&SupportRequest::PasswordReset);
+    println!("{:?}", first.handle(&SupportRequest::PasswordReset));
 
     // Test a request escalated down the chain
     println!("\n== Submitting Billing Issue ==");
-    first.handle(&SupportRequest::BillingIssue);
+    println!("{:?}", first.handle(&SupportRequest::BillingIssue));
 
     // Test an unhandled request
     println!("\n== Submitting Corporate Contract ==");
-    first.handle(&SupportRequest::CorporateContract);
+    println!("{:?}", first.handle(&SupportRequest::CorporateContract));
 }
 
 #[cfg(test)]
@@ -135,16 +150,65 @@ mod tests {
 
     #[test]
     fn password_reset_handled_at_first_line() {
-        build_chain().handle(&SupportRequest::PasswordReset);
+        assert_eq!(
+            build_chain().handle(&SupportRequest::PasswordReset),
+            HandleResult::Handled
+        );
     }
 
     #[test]
     fn billing_issue_escalated_to_supervisor() {
-        build_chain().handle(&SupportRequest::BillingIssue);
+        assert_eq!(
+            build_chain().handle(&SupportRequest::BillingIssue),
+            HandleResult::Escalated
+        );
     }
 
     #[test]
     fn corporate_contract_unhandled_at_end_of_chain() {
-        build_chain().handle(&SupportRequest::CorporateContract);
+        assert_eq!(
+            build_chain().handle(&SupportRequest::CorporateContract),
+            HandleResult::Unhandled
+        );
+    }
+
+    #[test]
+    fn supervisor_handles_billing_issue_directly() {
+        let supervisor = Supervisor::new();
+        assert_eq!(
+            supervisor.handle(&SupportRequest::BillingIssue),
+            HandleResult::Handled
+        );
+    }
+
+    #[test]
+    fn supervisor_cannot_handle_password_reset_alone() {
+        let supervisor = Supervisor::new();
+        assert_eq!(
+            supervisor.handle(&SupportRequest::PasswordReset),
+            HandleResult::Unhandled
+        );
+    }
+
+    #[test]
+    fn lone_first_line_cannot_handle_billing_issue() {
+        let first = FirstLineSupport::new();
+        assert_eq!(
+            first.handle(&SupportRequest::BillingIssue),
+            HandleResult::Unhandled
+        );
+    }
+
+    #[test]
+    fn supervisor_escalates_through_a_tail_handler() {
+        let mut supervisor = Supervisor::new();
+        let tail = FirstLineSupport::new();
+        supervisor.set_next_handler(Box::new(tail));
+
+        // Supervisor can't handle PasswordReset, so it escalates to tail...
+        assert_eq!(
+            supervisor.handle(&SupportRequest::PasswordReset),
+            HandleResult::Escalated
+        );
     }
 }
