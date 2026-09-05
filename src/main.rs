@@ -13,11 +13,22 @@ pub enum SupportRequest {
     CorporateContract,
 }
 
+/// Outcome of routing a request through the chain.
 #[derive(Debug, PartialEq, Eq)]
 pub enum HandleResult {
+    /// Resolved by the handler that was invoked.
     Handled,
+    /// Not resolved by the invoked handler, but resolved downstream.
     Escalated,
+    /// No handler in the chain could resolve the request.
     Unhandled,
+}
+
+impl HandleResult {
+    /// Whether the request was resolved somewhere in the chain.
+    fn is_resolved(&self) -> bool {
+        matches!(self, HandleResult::Handled | HandleResult::Escalated)
+    }
 }
 
 // ============================================================ //
@@ -29,13 +40,18 @@ pub trait Handler {
     fn set_next_handler(&mut self, next: Box<dyn Handler>);
 }
 
-// Shared chain-walking logic used by all concrete handlers.
+// A handler that cannot resolve a request forwards it to the next handler in
+// the chain. Resolving anywhere downstream counts as an escalation from the
+// forwarding handler's point of view.
 fn walk_chain(next_handler: Option<&Box<dyn Handler>>, request: &SupportRequest) -> HandleResult {
     match next_handler {
-        Some(next) => match next.handle(request) {
-            HandleResult::Handled | HandleResult::Escalated => HandleResult::Escalated,
-            HandleResult::Unhandled => HandleResult::Unhandled,
-        },
+        Some(next) => {
+            if next.handle(request).is_resolved() {
+                HandleResult::Escalated
+            } else {
+                HandleResult::Unhandled
+            }
+        }
         None => HandleResult::Unhandled,
     }
 }
@@ -61,14 +77,9 @@ impl Handler for FirstLineSupport {
     // FirstLineSupport can only handle PasswordResets
     fn handle(&self, request: &SupportRequest) -> HandleResult {
         if matches!(request, SupportRequest::PasswordReset) {
-            println!("FirstLineSupport: Resolved the PasswordReset request.");
             HandleResult::Handled
-        } else if self.next_handler.is_some() {
-            println!("FirstLineSupport: Cannot handle. Passing to next...");
-            walk_chain(self.next_handler.as_ref(), request)
         } else {
-            println!("FirstLineSupport: Reached end of chain. Request unhandled.");
-            HandleResult::Unhandled
+            walk_chain(self.next_handler.as_ref(), request)
         }
     }
 }
@@ -90,14 +101,9 @@ impl Handler for Supervisor {
     // Supervisor can only handle BillingIssues
     fn handle(&self, request: &SupportRequest) -> HandleResult {
         if matches!(request, SupportRequest::BillingIssue) {
-            println!("Supervisor: Resolved the BillingIssue request.");
             HandleResult::Handled
-        } else if self.next_handler.is_some() {
-            println!("Supervisor: Cannot handle. Passing to next...");
-            walk_chain(self.next_handler.as_ref(), request)
         } else {
-            println!("Supervisor: Cannot handle. Reached end of chain. Request unhandled.");
-            HandleResult::Unhandled
+            walk_chain(self.next_handler.as_ref(), request)
         }
     }
 }
@@ -108,20 +114,17 @@ impl Handler for Supervisor {
 
 fn main() {
     let mut first = FirstLineSupport::default();
-    let supervisor = Supervisor::default();
+    first.set_next_handler(Box::new(Supervisor::default()));
 
-    // Link the chain together
-    first.set_next_handler(Box::new(supervisor));
-
-    // Test a request handled at the start
+    // Handled at the start of the chain
     println!("== Submitting Password Reset ==");
     println!("{:?}", first.handle(&SupportRequest::PasswordReset));
 
-    // Test a request escalated down the chain
+    // Handled after escalation to the supervisor
     println!("\n== Submitting Billing Issue ==");
     println!("{:?}", first.handle(&SupportRequest::BillingIssue));
 
-    // Test an unhandled request
+    // Falls off the end of the chain, unhandled
     println!("\n== Submitting Corporate Contract ==");
     println!("{:?}", first.handle(&SupportRequest::CorporateContract));
 }
