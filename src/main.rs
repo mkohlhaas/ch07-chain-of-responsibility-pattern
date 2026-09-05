@@ -37,7 +37,7 @@ pub struct FirstLineSupport {
 
 impl FirstLineSupport {
     pub fn new() -> Self {
-        Self { next_handler: None }
+        Self::default()
     }
 }
 
@@ -73,7 +73,7 @@ pub struct Supervisor {
 
 impl Supervisor {
     pub fn new() -> Self {
-        Self { next_handler: None }
+        Self::default()
     }
 }
 
