@@ -121,3 +121,30 @@ fn main() {
     println!("\n== Submitting Corporate Contract ==");
     first.handle(&SupportRequest::CorporateContract);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build_chain() -> FirstLineSupport {
+        let mut first = FirstLineSupport::new();
+        let supervisor = Supervisor::new();
+        first.set_next_handler(Box::new(supervisor));
+        first
+    }
+
+    #[test]
+    fn password_reset_handled_at_first_line() {
+        build_chain().handle(&SupportRequest::PasswordReset);
+    }
+
+    #[test]
+    fn billing_issue_escalated_to_supervisor() {
+        build_chain().handle(&SupportRequest::BillingIssue);
+    }
+
+    #[test]
+    fn corporate_contract_unhandled_at_end_of_chain() {
+        build_chain().handle(&SupportRequest::CorporateContract);
+    }
+}
