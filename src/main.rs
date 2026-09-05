@@ -29,6 +29,7 @@ pub trait Handler {
     fn set_next_handler(&mut self, next: Box<dyn Handler>);
 }
 
+// Shared chain-walking logic used by all concrete handlers.
 fn walk_chain(next_handler: Option<&Box<dyn Handler>>, request: &SupportRequest) -> HandleResult {
     match next_handler {
         Some(next) => match next.handle(request) {
@@ -50,12 +51,6 @@ fn walk_chain(next_handler: Option<&Box<dyn Handler>>, request: &SupportRequest)
 #[derive(Default)]
 pub struct FirstLineSupport {
     next_handler: Option<Box<dyn Handler>>,
-}
-
-impl FirstLineSupport {
-    pub fn new() -> Self {
-        Self::default()
-    }
 }
 
 impl Handler for FirstLineSupport {
@@ -87,12 +82,6 @@ pub struct Supervisor {
     next_handler: Option<Box<dyn Handler>>,
 }
 
-impl Supervisor {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 impl Handler for Supervisor {
     fn set_next_handler(&mut self, next: Box<dyn Handler>) {
         self.next_handler = Some(next);
@@ -118,8 +107,8 @@ impl Handler for Supervisor {
 // ================================== //
 
 fn main() {
-    let mut first = FirstLineSupport::new();
-    let supervisor = Supervisor::new();
+    let mut first = FirstLineSupport::default();
+    let supervisor = Supervisor::default();
 
     // Link the chain together
     first.set_next_handler(Box::new(supervisor));
@@ -142,8 +131,8 @@ mod tests {
     use super::*;
 
     fn build_chain() -> FirstLineSupport {
-        let mut first = FirstLineSupport::new();
-        let supervisor = Supervisor::new();
+        let mut first = FirstLineSupport::default();
+        let supervisor = Supervisor::default();
         first.set_next_handler(Box::new(supervisor));
         first
     }
@@ -174,7 +163,7 @@ mod tests {
 
     #[test]
     fn supervisor_handles_billing_issue_directly() {
-        let supervisor = Supervisor::new();
+        let supervisor = Supervisor::default();
         assert_eq!(
             supervisor.handle(&SupportRequest::BillingIssue),
             HandleResult::Handled
@@ -183,7 +172,7 @@ mod tests {
 
     #[test]
     fn supervisor_cannot_handle_password_reset_alone() {
-        let supervisor = Supervisor::new();
+        let supervisor = Supervisor::default();
         assert_eq!(
             supervisor.handle(&SupportRequest::PasswordReset),
             HandleResult::Unhandled
@@ -192,7 +181,7 @@ mod tests {
 
     #[test]
     fn lone_first_line_cannot_handle_billing_issue() {
-        let first = FirstLineSupport::new();
+        let first = FirstLineSupport::default();
         assert_eq!(
             first.handle(&SupportRequest::BillingIssue),
             HandleResult::Unhandled
@@ -201,8 +190,8 @@ mod tests {
 
     #[test]
     fn supervisor_escalates_through_a_tail_handler() {
-        let mut supervisor = Supervisor::new();
-        let tail = FirstLineSupport::new();
+        let mut supervisor = Supervisor::default();
+        let tail = FirstLineSupport::default();
         supervisor.set_next_handler(Box::new(tail));
 
         // Supervisor can't handle PasswordReset, so it escalates to tail...

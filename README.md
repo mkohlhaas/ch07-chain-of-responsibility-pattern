@@ -22,7 +22,7 @@ recursive runtime linking, and enums for flexible requests:
        │                       Handler                          │
        ├────────────────────────────────────────────────────────┤
        │ + set_next(handler: Box<dyn Handler>)                  │
-       │ + handle(request: <Enum>) -> Option<String>            │
+       │ + handle(request: <Request Enum>) -> HandleResult      │
        └────────────────────────────────────────────────────────┘
           ▲                                        ▲
           │                                        │
